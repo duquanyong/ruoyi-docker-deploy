@@ -1,0 +1,19 @@
+.env
+.env.local
+logs/
+*.log
+backup/
+
+# 数据卷 (由 Docker 自动生成)
+mysql_data/
+redis_data/
+ruoyi_upload/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# 系统文件
+.DS_Store
+Thumbs.db

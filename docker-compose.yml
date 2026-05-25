@@ -1,0 +1,119 @@
+services:
+  # MySQL 数据库
+  mysql:
+    image: docker.1ms.run/mysql:8.0
+    container_name: ruoyi-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-ruoyi123456}
+      MYSQL_DATABASE: ry-vue
+      MYSQL_USER: ${MYSQL_USER:-ruoyi}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ruoyi123456}
+      TZ: Asia/Shanghai
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --skip-character-set-client-handshake
+      --init-connect="SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
+      --default-time-zone=+08:00
+      --innodb_buffer_pool_size=256M
+      --innodb_log_file_size=64M
+      --innodb_flush_log_at_trx_commit=2
+      --max_connections=200
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql/init:/docker-entrypoint-initdb.d
+    networks:
+      - ruoyi-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  # Redis 缓存
+  redis:
+    image: docker.1ms.run/redis:7-alpine
+    container_name: ruoyi-redis
+    restart: always
+    environment:
+      TZ: Asia/Shanghai
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - ruoyi-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 若依后端服务 (Spring Boot)
+  ruoyi-backend:
+    build:
+      context: ./RuoYi-Vue
+      dockerfile: ../docker/ruoyi-vue/Dockerfile
+    container_name: ruoyi-backend
+    restart: always
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    environment:
+      SPRING_DATASOURCE_DRUID_MASTER_URL: jdbc:mysql://mysql:3306/ry-vue?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_DRUID_MASTER_USERNAME: root
+      SPRING_DATASOURCE_DRUID_MASTER_PASSWORD: ${MYSQL_ROOT_PASSWORD:-ruoyi123456}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD:
+      SPRING_DATA_REDIS_DATABASE: 0
+      RUOYI_PROFILE: /ruoyi/uploadPath
+      JAVA_OPTS: "-Xms512m -Xmx1024m -Djava.security.egd=file:/dev/./urandom"
+    volumes:
+      - ruoyi_upload:/ruoyi/uploadPath
+      - ./ruoyi-vue/logs:/ruoyi/logs
+    networks:
+      - ruoyi-network
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # 若依前端服务 (Vue3 + Nginx)
+  ruoyi-frontend:
+    build:
+      context: .
+      dockerfile: docker/ruoyi-vue3/Dockerfile
+    container_name: ruoyi-frontend
+    restart: always
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    environment:
+      API_BASE_URL: http://ruoyi-backend:8080
+    networks:
+      - ruoyi-network
+    depends_on:
+      - ruoyi-backend
+
+volumes:
+  mysql_data:
+    driver: local
+  redis_data:
+    driver: local
+  ruoyi_upload:
+    driver: local
+
+networks:
+  ruoyi-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
