@@ -63,13 +63,42 @@ MYSQL_ROOT_PASSWORD=YourStrongPassword123!
 MYSQL_PASSWORD=YourStrongPassword123!
 ```
 
-### 4. 启动服务
+### 4. 构建前端（Windows 推荐本地构建）
+
+由于 Docker 在 Windows 上构建前端非常慢（需要安装 g++、下载大量 npm 依赖），**推荐在本地构建前端**，然后将构建产物 `dist` 目录挂载到 Nginx 容器。
+
+**步骤：**
+
+1. 进入前端目录并安装依赖：
 
 ```bash
+cd RuoYi-Vue3
+yarn install --registry=https://registry.npmmirror.com
+```
+
+2. 构建生产环境产物：
+
+```bash
+yarn build:prod
+```
+
+3. 确认 `RuoYi-Vue3/dist` 目录已生成：
+
+```bash
+ls dist/
+# 应输出：favicon.ico  index.html  index.html.gz  static
+```
+
+> 前端 Dockerfile 已配置为直接从 `RuoYi-Vue3/dist` 复制构建产物，无需在容器内重复构建。
+
+### 5. 启动服务
+
+```bash
+cd ..
 docker-compose up -d
 ```
 
-### 5. 访问系统
+### 6. 访问系统
 
 - 前端：http://localhost
 - 后端 API：http://localhost:8080
